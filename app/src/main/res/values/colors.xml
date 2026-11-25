@@ -4,6 +4,12 @@
     <color name="brand_purple">#6C5CE7</color>
     <color name="brand_purple_dark">#4834D4</color>
     <color name="brand_accent">#00CEC9</color>
+    <color name="brand_emerald">#10B981</color>
+    <color name="brand_emerald_light">#34D399</color>
+    <color name="brand_emerald_dark">#047857</color>
+    <color name="card_dark">#12181F</color>
+    <color name="card_focus_stroke">#10B981</color>
+    <color name="text_secondary">#9CA3AF</color>
     <color name="indicator_bg">#B31E1E2E</color>
     <color name="cursor_tint">#00FFF2</color>
 </resources>
