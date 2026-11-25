@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">7Reels TV</string>
+    <string name="exit_prompt">Press Back again to exit</string>
+    <string name="cursor_on">Cursor ON</string>
+    <string name="cursor_off">Cursor OFF</string>
+    <string name="error_loading">Failed to load content. Press OK to retry.</string>
+</resources>

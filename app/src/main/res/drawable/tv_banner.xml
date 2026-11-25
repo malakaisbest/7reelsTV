@@ -1,0 +1,95 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+
+    <!-- Background Gradient -->
+    <path
+        android:pathData="M0,0h320v180h-320z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="0"
+                android:startY="0"
+                android:endX="320"
+                android:endY="180"
+                android:type="linear">
+                <item android:color="#FF1A1A2E" android:offset="0.0" />
+                <item android:color="#FF16213E" android:offset="0.5" />
+                <item android:color="#FF0F3460" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Decorative Glow Arc -->
+    <path
+        android:pathData="M-40,90 Q80,10 200,90 T400,90 L400,180 L-40,180 Z"
+        android:fillAlpha="0.15">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="0"
+                android:startY="0"
+                android:endX="320"
+                android:endY="0"
+                android:type="linear">
+                <item android:color="#FF6C5CE7" android:offset="0.0" />
+                <item android:color="#FF00CEC9" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Play Badge Circle -->
+    <path
+        android:pathData="M 95,90 m -35,0 a 35,35 0 1,0 70,0 a 35,35 0 1,0 -70,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="60"
+                android:startY="55"
+                android:endX="130"
+                android:endY="125"
+                android:type="linear">
+                <item android:color="#FF6C5CE7" android:offset="0.0" />
+                <item android:color="#FF00CEC9" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Play Icon Triangle -->
+    <path
+        android:pathData="M88,75 L108,90 L88,105 Z"
+        android:fillColor="#FFFFFFFF" />
+
+    <!-- Number "7" Emblem -->
+    <path
+        android:pathData="M145,65 L175,65 L160,115 L150,115 L163,77 L145,77 Z"
+        android:fillColor="#FFFFFFFF" />
+
+    <!-- Word "REELS" styling -->
+    <path
+        android:pathData="M182,78 L192,78 C196,78 198,80 198,83 C198,86 196,88 192,88 L187,88 L187,97 L182,97 Z M187,83 L187,85 L191,85 C192.5,85 193.5,84.5 193.5,83.8 C193.5,83.2 192.5,83 191,83 Z M192,88 L199,97 L193.5,97 L187.5,89 Z"
+        android:fillColor="#FF00CEC9" />
+
+    <path
+        android:pathData="M202,78 L216,78 L216,82 L207,82 L207,85.5 L214,85.5 L214,89.5 L207,89.5 L207,93 L216,93 L216,97 L202,97 Z"
+        android:fillColor="#FFFFFFFF" />
+
+    <path
+        android:pathData="M219,78 L233,78 L233,82 L224,82 L224,85.5 L231,85.5 L231,89.5 L224,89.5 L224,93 L233,93 L233,97 L219,97 Z"
+        android:fillColor="#FFFFFFFF" />
+
+    <path
+        android:pathData="M236,78 L241,78 L241,93 L249,93 L249,97 L236,97 Z"
+        android:fillColor="#FFFFFFFF" />
+
+    <path
+        android:pathData="M251,92.5 C252,90 254.5,89 257.5,88.5 C260.5,88 262.5,87 262.5,85 C262.5,83 260.5,82 258,82 C255,82 253,83 252,85 L247.5,83 C249,79.5 253,78 258,78 C263.5,78 267.5,80.5 267.5,85 C267.5,88 265,89.5 261,90.5 C258,91.2 256.5,92 256.5,93.5 C256.5,95 258,95.5 260,95.5 C263,95.5 265,94.5 266,92.5 L270,95 C268.5,98.5 264.5,99.5 260,99.5 C254,99.5 251,96.5 251,92.5 Z"
+        android:fillColor="#FF00CEC9" />
+
+    <!-- Subtitle "TV EDITION" -->
+    <path
+        android:pathData="M145,123 L157,123 L157,125 L152,125 L152,132 L150,132 L150,125 L145,125 Z M158,123 L161,123 L163.5,130 L166,123 L169,123 L165,132 L162,132 Z"
+        android:fillAlpha="0.7"
+        android:fillColor="#FFFFFFFF" />
+
+</vector>

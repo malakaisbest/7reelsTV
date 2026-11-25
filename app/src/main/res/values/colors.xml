@@ -1,0 +1,9 @@
+<resources>
+    <color name="black">#000000</color>
+    <color name="white">#FFFFFF</color>
+    <color name="brand_purple">#6C5CE7</color>
+    <color name="brand_purple_dark">#4834D4</color>
+    <color name="brand_accent">#00CEC9</color>
+    <color name="indicator_bg">#B31E1E2E</color>
+    <color name="cursor_tint">#00FFF2</color>
+</resources>
