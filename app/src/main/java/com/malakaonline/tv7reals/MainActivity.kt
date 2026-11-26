@@ -418,7 +418,7 @@ class MainActivity : AppCompatActivity() {
         Log.d(TAG, "Playing stream via ${selectedServer.name}: $finalUrl (resumeAt: $resumeAt)")
         val itemLabel = if (movie.mediaType == "tv") "S${season} E${episode}" else "Movie"
         val resumeMsg = if (resumeAt > 0L) " [Resuming at ${formatTimeSeconds(resumeAt)}]" else ""
-        Toast.makeText(this, "▶ OK: Play/Pause • ◀/▶: Seek • 💬 Subtitles: Remote 'Subtitles' or Long-press OK", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "▶ OK: Play • ◄/►: Seek • ▲ UP: Subtitles • ▼ DOWN: Mouse Cursor", Toast.LENGTH_LONG).show()
         webView.loadUrl(finalUrl)
         webView.requestFocus()
     }
@@ -845,6 +845,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_UP) {
+            Log.d(TAG, "dispatchKeyEvent UP: keyCode=${event.keyCode} (${KeyEvent.keyCodeToString(event.keyCode)})")
+        }
+
         // Reset 5s auto-rotate timer on any user remote input
         if (currentAppMode == AppPreferences.MODE_NATIVE && browseContainer.visibility == View.VISIBLE) {
             resetAutoRotateTimer()
@@ -856,11 +860,15 @@ class MainActivity : AppCompatActivity() {
             return true
         }
 
-        // Subtitle / Captions button on TV remote
+        // Subtitle / Captions button or Color buttons (Yellow/Blue) on TV remote
         val isSubtitleKey = event.keyCode == KeyEvent.KEYCODE_CAPTIONS ||
                             event.keyCode == KeyEvent.KEYCODE_MEDIA_AUDIO_TRACK ||
                             event.keyCode == 175 || // KEYCODE_CAPTIONS explicit fallback
-                            event.keyCode == 233    // KEYCODE_TV_TELETEXT
+                            event.keyCode == 233 || // KEYCODE_TV_TELETEXT
+                            event.keyCode == KeyEvent.KEYCODE_PROG_YELLOW ||
+                            event.keyCode == KeyEvent.KEYCODE_PROG_BLUE ||
+                            event.keyCode == 185 || // KEYCODE_PROG_YELLOW fallback
+                            event.keyCode == 186    // KEYCODE_PROG_BLUE fallback
         if (isSubtitleKey && event.action == KeyEvent.ACTION_UP) {
             toggleSubtitlesAction()
             return true
@@ -895,6 +903,22 @@ class MainActivity : AppCompatActivity() {
                 if (event.action == KeyEvent.ACTION_DOWN && !cursorLayout.isCursorMode) {
                     webView.evaluateJavascript("window.__7reels_seek && window.__7reels_seek(10);", null)
                     Toast.makeText(this, "⏩ +10s", Toast.LENGTH_SHORT).show()
+                    return true
+                }
+            } else if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                // D-Pad UP on TV remote: Instantly open Subtitle / CC menu during video playback!
+                if (event.action == KeyEvent.ACTION_UP && !cursorLayout.isCursorMode) {
+                    toggleSubtitlesAction()
+                    return true
+                }
+            } else if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                // D-Pad DOWN on TV remote: Enable mouse cursor mode to interact with player options
+                if (event.action == KeyEvent.ACTION_UP && !cursorLayout.isCursorMode) {
+                    cursorLayout.toggleCursorMode(true)
+                    val w = if (cursorLayout.width > 0) cursorLayout.width.toFloat() else 1920f
+                    val h = if (cursorLayout.height > 0) cursorLayout.height.toFloat() else 1080f
+                    cursorLayout.setCursorPosition(w * 0.88f, h * 0.88f)
+                    Toast.makeText(this, "🖱️ Cursor ON (Long-press OK to toggle off)", Toast.LENGTH_SHORT).show()
                     return true
                 }
             }
