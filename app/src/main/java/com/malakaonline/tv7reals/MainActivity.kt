@@ -418,7 +418,7 @@ class MainActivity : AppCompatActivity() {
         Log.d(TAG, "Playing stream via ${selectedServer.name}: $finalUrl (resumeAt: $resumeAt)")
         val itemLabel = if (movie.mediaType == "tv") "S${season} E${episode}" else "Movie"
         val resumeMsg = if (resumeAt > 0L) " [Resuming at ${formatTimeSeconds(resumeAt)}]" else ""
-        Toast.makeText(this, "▶ OK: Play • ◄/►: Seek • ▲ UP: Subtitles • ▼ DOWN: Mouse Cursor", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "▶ OK: Play • ◄/►: Seek • ▲ UP: Subtitles • Back: Close Cursor", Toast.LENGTH_LONG).show()
         webView.loadUrl(finalUrl)
         webView.requestFocus()
     }
@@ -963,14 +963,14 @@ class MainActivity : AppCompatActivity() {
                 Log.d(TAG, "Subtitles toggled: $result")
             }
 
-            // 2. Enable mouse cursor positioned at bottom-right near player controls
+            // 2. Enable mouse cursor positioned above CC button directly on the language popup list
             if (!cursorLayout.isCursorMode) {
                 cursorLayout.toggleCursorMode(true)
-                val w = if (cursorLayout.width > 0) cursorLayout.width.toFloat() else 1920f
-                val h = if (cursorLayout.height > 0) cursorLayout.height.toFloat() else 1080f
-                cursorLayout.setCursorPosition(w * 0.88f, h * 0.88f)
             }
-            Toast.makeText(this, "💬 Subtitles / CC (Use remote arrows & OK to select)", Toast.LENGTH_SHORT).show()
+            val w = if (cursorLayout.width > 0) cursorLayout.width.toFloat() else 1920f
+            val h = if (cursorLayout.height > 0) cursorLayout.height.toFloat() else 1080f
+            cursorLayout.setCursorPosition(w * 0.85f, h * 0.68f)
+            Toast.makeText(this, "💬 Subtitles / CC (OK: Select • Back: Close Cursor)", Toast.LENGTH_SHORT).show()
         } else {
             Toast.makeText(this, "💬 Subtitles button is active during video playback", Toast.LENGTH_SHORT).show()
         }
@@ -992,13 +992,20 @@ class MainActivity : AppCompatActivity() {
     private fun setupBackPressHandler() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                // 1. Close HTML5 video if active
+                // 1. If cursor mode is active during playback, Back key dismisses cursor mode first without closing video!
+                if (cursorLayout.isCursorMode) {
+                    cursorLayout.toggleCursorMode(false)
+                    Toast.makeText(this@MainActivity, "🖱️ Cursor OFF", Toast.LENGTH_SHORT).show()
+                    return
+                }
+
+                // 2. Close HTML5 video if active
                 if (customView != null) {
                     hideCustomView()
                     return
                 }
 
-                // 2. If watching stream initiated from Native mode, return to Movie Details / Server screen
+                // 3. If watching stream initiated from Native mode, return to Movie Details / Server screen
                 if (isWatchingFromNative) {
                     isWatchingFromNative = false
                     cursorLayout.toggleCursorMode(false)

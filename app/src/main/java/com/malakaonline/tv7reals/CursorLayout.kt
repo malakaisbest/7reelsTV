@@ -43,6 +43,20 @@ class CursorLayout @JvmOverloads constructor(
         toggleCursorMode()
     }
 
+    private val autoHideMs: Long = 6500L
+    private val autoHideRunnable = Runnable {
+        if (isCursorMode) {
+            toggleCursorMode(false)
+        }
+    }
+
+    private fun resetAutoHideTimer() {
+        mainHandler.removeCallbacks(autoHideRunnable)
+        if (isCursorMode) {
+            mainHandler.postDelayed(autoHideRunnable, autoHideMs)
+        }
+    }
+
     override fun onFinishInflate() {
         super.onFinishInflate()
         cursorView = findViewById(R.id.cursorView)
@@ -65,6 +79,10 @@ class CursorLayout @JvmOverloads constructor(
      */
     fun toggleCursorMode(enable: Boolean = !isCursorMode) {
         isCursorMode = enable
+        mainHandler.removeCallbacks(autoHideRunnable)
+        if (isCursorMode) {
+            resetAutoHideTimer()
+        }
 
         cursorView?.apply {
             visibility = if (isCursorMode) View.VISIBLE else View.GONE
@@ -92,6 +110,14 @@ class CursorLayout @JvmOverloads constructor(
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val keyCode = event.keyCode
+
+        // Back key in cursor mode: deactivates cursor without closing video!
+        if (keyCode == KeyEvent.KEYCODE_BACK && isCursorMode) {
+            if (event.action == KeyEvent.ACTION_UP) {
+                toggleCursorMode(false)
+            }
+            return true
+        }
 
         // 1. Menu or Info key triggers toggle on key up
         if (keyCode == KeyEvent.KEYCODE_MENU ||
@@ -121,8 +147,15 @@ class CursorLayout @JvmOverloads constructor(
                         return true
                     }
                     if (isCursorMode) {
-                        // Regular short tap in cursor mode => dispatch touch click
+                        // Regular short tap in cursor mode => dispatch touch click at (cursorX, cursorY)
                         dispatchSimulatedClick()
+                        resetAutoHideTimer()
+                        // Automatically auto-hide cursor 2 seconds after selecting an option
+                        mainHandler.postDelayed({
+                            if (isCursorMode) {
+                                toggleCursorMode(false)
+                            }
+                        }, 2000)
                         return true
                     }
                 }
@@ -149,21 +182,25 @@ class CursorLayout @JvmOverloads constructor(
                 KeyEvent.KEYCODE_DPAD_UP -> {
                     cursorY = max(0f, cursorY - step)
                     updateCursorPosition()
+                    resetAutoHideTimer()
                     return true
                 }
                 KeyEvent.KEYCODE_DPAD_DOWN -> {
                     cursorY = min(height.toFloat() - 10f, cursorY + step)
                     updateCursorPosition()
+                    resetAutoHideTimer()
                     return true
                 }
                 KeyEvent.KEYCODE_DPAD_LEFT -> {
                     cursorX = max(0f, cursorX - step)
                     updateCursorPosition()
+                    resetAutoHideTimer()
                     return true
                 }
                 KeyEvent.KEYCODE_DPAD_RIGHT -> {
                     cursorX = min(width.toFloat() - 10f, cursorX + step)
                     updateCursorPosition()
+                    resetAutoHideTimer()
                     return true
                 }
             }
@@ -176,6 +213,7 @@ class CursorLayout @JvmOverloads constructor(
         cursorX = x
         cursorY = y
         updateCursorPosition()
+        resetAutoHideTimer()
     }
 
     private fun updateCursorPosition() {
