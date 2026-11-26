@@ -7,7 +7,7 @@ This guide explains how to install the **7Reels TV** application on any Android 
 ## 📥 Download the APK
 
 Always download the latest build from the [GitHub Releases](https://github.com/malakaisbest/7reelsTV/releases) page:
-- **Direct APK:** `7ReelsTV-v1.0.0.apk`
+- **Direct APK:** `7ReelsTV-v1.1.0.apk`
 
 ---
 
@@ -26,7 +26,7 @@ If your TV or Raspberry Pi has **Network ADB Debugging** enabled:
 2. **Connect and Install from your PC / Terminal:**
    ```bash
    adb connect <TV_IP_ADDRESS>:5555
-   adb install -r 7ReelsTV-v1.0.0.apk
+   adb install -r 7ReelsTV-v1.1.0.apk
    ```
 
 3. **Launch the App:**
@@ -39,12 +39,12 @@ If your TV or Raspberry Pi has **Network ADB Debugging** enabled:
 
 ### Method 2: Sideloading via USB Flash Drive
 
-1. Download `7ReelsTV-v1.0.0.apk` onto a USB flash drive formatted in FAT32 or exFAT.
+1. Download `7ReelsTV-v1.1.0.apk` onto a USB flash drive formatted in FAT32 or exFAT.
 2. Plug the USB flash drive into your Android TV or Raspberry Pi 4.
 3. On your TV, install a file manager from Google Play Store or F-Droid (e.g., **FX File Explorer**, **AnExplorer**, or **Total Commander**).
 4. Allow your file manager permission to *"Install unknown apps"*:
    - **Settings** > **Apps** > **Special app access** > **Install unknown apps** > Enable your file manager.
-5. Open your file manager, navigate to the USB drive, click `7ReelsTV-v1.0.0.apk`, and select **Install**.
+5. Open your file manager, navigate to the USB drive, click `7ReelsTV-v1.1.0.apk`, and select **Install**.
 
 ---
 
@@ -54,7 +54,7 @@ If your TV or Raspberry Pi has **Network ADB Debugging** enabled:
 2. In TV Settings > Security & Restrictions, enable **Install unknown apps** for the *Downloader* app.
 3. Open *Downloader* and enter the direct download URL for the release APK from the GitHub releases page:
    ```text
-   https://github.com/malakaisbest/7reelsTV/releases/latest/download/7ReelsTV-v1.0.0.apk
+   https://github.com/malakaisbest/7reelsTV/releases/latest/download/7ReelsTV-v1.1.0.apk
    ```
 4. Once the download finishes, click **Install** when prompted.
 

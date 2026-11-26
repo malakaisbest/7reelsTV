@@ -15,21 +15,29 @@ A lightweight, dedicated kiosk web browser application designed specifically for
 
 ## ✨ Features
 
-- **Leanback TV Launcher:** Appears natively on the Android TV home screen row with a custom 320x180dp vector banner (`@drawable/tv_banner`).
-- **Immersive Fullscreen:** Automatically hides status and navigation bars with sticky immersive mode (`BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE`).
-- **Desktop Layout:** Sends a Linux Chrome Desktop User-Agent so the website renders in full widescreen 1080p rather than mobile view.
+- **Dual TV Modes:**
+  - **Native Leanback Experience:** Smooth, remote-friendly dashboard with featured movies auto-rotation, Trending rows, and Movies / TV Series browse grids.
+  - **WebView Browser Mode:** Full desktop kiosk browser mode for the direct website experience with integrated overlay exit & mode-switcher controls.
+- **Movie Details & Media Hub:**
+  - View full plot, genres, user rating, and release date.
+  - Horizontally scrollable **Cast & Crew** actors list with headshots.
+  - Grid-based **Streaming Server Selector** with server status badges.
+  - TV Shows season & episode explorer.
+  - Similar & Recommended Movies row.
+- **Watch History & Continue Watching:**
+  - Automatic watch timeline tracking for movies and TV episodes.
+  - Dedicated **Continue Watching** shelf on the home screen with progress bar and remaining time (`1h 32m left`).
+  - **Smart Resume Dialog:** Automatically prompts to resume playback right where you left off or start from the beginning.
+- **Enhanced TV Remote Controls & Player Shortcuts:**
+  - **D-Pad UP (▲):** Instantly triggers Subtitle/CC menu and focuses language selection.
+  - **D-Pad Center (OK):** Direct Play / Pause toggle inside video player.
+  - **D-Pad Left / Right (◄ / ►):** Instant 10-second Seek backward / forward with on-screen HUD.
+  - **Remote Back Button:** Exits virtual cursor mode instantly without closing playback.
+  - **Virtual Mouse Cursor:** Long-press OK or press MENU to toggle virtual cursor anytime.
 - **Three-Tier Ad & Popup Blocking:**
   - Silently drops all `window.open()` and `target="_blank"` popups.
-  - Enforces domain locking to `7reels.cc` and trusted CDN/video hosts, blocking rogue redirects.
+  - Enforces domain locking to trusted CDN/video hosts, blocking rogue redirects.
   - Network-level interception returning empty responses for known tracker and ad networks.
-- **HTML5 Fullscreen Video:** Automatically expands video streams to the full display via `onShowCustomView` / `onHideCustomView`.
-- **Integrated Exit Buttons:**
-  - Injected directly into the top navigation bar (`Home`, `Movies`, `Series`, `My List`, `Exit`).
-  - Injected directly next to the floating **Back** button inside the movie watch player (`/watch`).
-- **Remote-Friendly Navigation:**
-  - Standard D-Pad focus navigation.
-  - **Virtual Mouse Cursor:** Long-press **OK** or press **MENU** to toggle an on-screen cursor for buttons without keyboard focus states.
-  - **Instant Exit:** Hold the remote **BACK** button for 0.8s from any screen to close the app without traversing history.
 
 ---
 
@@ -39,11 +47,11 @@ For detailed step-by-step instructions, see [INSTALLATION.md](INSTALLATION.md).
 
 ### Quick Install via ADB (Raspberry Pi 4 / Android TV):
 
-1. Download `7ReelsTV-v1.0.0.apk` from [Releases](https://github.com/malakaisbest/7reelsTV/releases).
+1. Download `7ReelsTV-v1.1.0.apk` from [Releases](https://github.com/malakaisbest/7reelsTV/releases).
 2. Connect to your TV over Wi-Fi:
    ```bash
    adb connect <TV_IP_ADDRESS>:5555
-   adb install -r 7ReelsTV-v1.0.0.apk
+   adb install -r 7ReelsTV-v1.1.0.apk
    ```
 
 ---
@@ -52,10 +60,12 @@ For detailed step-by-step instructions, see [INSTALLATION.md](INSTALLATION.md).
 
 | Button | Function |
 | :--- | :--- |
-| **D-Pad Direction Keys** | Move focus between elements |
-| **D-Pad Center (OK)** | Select / Click focused item |
+| **D-Pad Direction Keys** | Move focus between cards / grids |
+| **D-Pad Center (OK)** | Select item / Play-Pause inside video stream |
+| **D-Pad UP (▲)** | Auto-open Subtitles / CC menu during video playback |
+| **D-Pad Left / Right (◄ / ►)** | Seek -10s / +10s during video playback |
 | **Long-Press OK (0.6s) / MENU** | Toggle Virtual Mouse Cursor overlay |
-| **Back (Short Press)** | Exit fullscreen video $\rightarrow$ Go back in web history |
+| **Back (Short Press)** | Exit cursor mode $\rightarrow$ Exit video $\rightarrow$ Go back in history |
 | **Back (Hold 0.8s)** | **Direct Exit App** (bypasses history stack) |
 | **Back (Double Tap at Root)** | Exit confirmation guard |
 
