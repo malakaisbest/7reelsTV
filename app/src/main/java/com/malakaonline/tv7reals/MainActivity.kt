@@ -96,6 +96,7 @@ class MainActivity : AppCompatActivity() {
 
     private var currentHeroMovie: MovieItem? = null
     private var currentDetailMovie: MovieItem? = null
+    private var currentMovieDetail: MovieDetail? = null
     private var featuredQueue: List<MovieItem> = emptyList()
     private var currentFeaturedIndex: Int = 0
 
@@ -350,12 +351,16 @@ class MainActivity : AppCompatActivity() {
 
     private fun updatePlayStatus() {
         val movie = currentDetailMovie ?: return
+        val history = WatchHistoryManager.getProgress(this, movie.id, movie.mediaType, selectedSeasonNum, selectedEpisodeNum)
+        val hasResume = history != null && history.positionSeconds > 15L && (history.durationSeconds == 0L || history.positionSeconds < history.durationSeconds - 60L)
+        val resumeLabel = if (hasResume) " • ⏩ Resume (${history?.getFormattedPosition()})" else ""
+
         if (movie.mediaType == "tv") {
-            tvPlayStatus.text = "${selectedServer.name}  •  S${selectedSeasonNum} E${selectedEpisodeNum}"
-            btnPlayNow.text = "▶ Watch S${selectedSeasonNum} E${selectedEpisodeNum}"
+            tvPlayStatus.text = "${selectedServer.name}  •  S${selectedSeasonNum} E${selectedEpisodeNum}$resumeLabel"
+            btnPlayNow.text = if (hasResume) "⏩ Resume S${selectedSeasonNum} E${selectedEpisodeNum}" else "▶ Watch S${selectedSeasonNum} E${selectedEpisodeNum}"
         } else {
-            tvPlayStatus.text = "${selectedServer.name}  •  Full Movie"
-            btnPlayNow.text = "▶ Watch Movie"
+            tvPlayStatus.text = "${selectedServer.name}  •  Full Movie$resumeLabel"
+            btnPlayNow.text = if (hasResume) "⏩ Resume Movie (${history?.getFormattedPosition()})" else "▶ Watch Movie"
         }
     }
 
@@ -419,13 +424,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun executePlayback(movie: MovieItem, season: Int, episode: Int, resumeAt: Long) {
+        currentDetailMovie = movie
+        selectedSeasonNum = season
+        selectedEpisodeNum = episode
         stopAutoRotateTimer()
         isWatchingFromNative = true
         currentSeekTime = resumeAt
         currentEstimatedPosition = resumeAt
         playbackStartWallTime = System.currentTimeMillis()
         isPlayerPaused = false
-        estimatedDuration = if (movie.runtime > 0) movie.runtime * 60L else 7200L
+        val durFromDetail = currentMovieDetail?.takeIf { it.id == movie.id }?.runtime?.takeIf { it > 0 }?.toLong()?.times(60L)
+        val historyItem = WatchHistoryManager.getProgress(this, movie.id, movie.mediaType, season, episode)
+        estimatedDuration = durFromDetail ?: historyItem?.durationSeconds?.takeIf { it > 0L } ?: 7200L
         playbackProgressHandler.removeCallbacks(playbackProgressRunnable)
         playbackProgressHandler.postDelayed(playbackProgressRunnable, 4000L)
 
@@ -460,6 +470,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun openMovieDetails(item: MovieItem) {
         currentDetailMovie = item
+        currentMovieDetail = null
         stopAutoRotateTimer()
 
         // Reset server and season/episode state
@@ -520,6 +531,7 @@ class MainActivity : AppCompatActivity() {
                 val detail = MovieRepository.getMovieDetails(item.id, item.mediaType)
                 detailsLoading.visibility = View.GONE
                 if (detail != null) {
+                    currentMovieDetail = detail
                     if (detail.tagline.isNotEmpty()) {
                         detailsTagline.text = "\"${detail.tagline}\""
                         detailsTagline.visibility = View.VISIBLE
@@ -1066,6 +1078,7 @@ class MainActivity : AppCompatActivity() {
                     webView.loadUrl("about:blank")
                     webView.visibility = View.GONE
                     nativeTvContainer.visibility = View.VISIBLE
+                    updatePlayStatus()
                     refreshContinueWatching()
                     // Return focus to Play button
                     btnPlayNow.requestFocus()
