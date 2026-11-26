@@ -115,6 +115,24 @@ class MainActivity : AppCompatActivity() {
     private var selectedSeasonNum: Int = 1
     private var selectedEpisodeNum: Int = 1
 
+    // Robust Timeline Tracking Engine
+    private var playbackStartWallTime: Long = 0L
+    private var currentEstimatedPosition: Long = 0L
+    private var estimatedDuration: Long = 7200L
+    private var isPlayerPaused: Boolean = false
+    private val playbackProgressHandler = Handler(Looper.getMainLooper())
+    private val playbackProgressRunnable = object : Runnable {
+        override fun run() {
+            if (isWatchingFromNative && !isPlayerPaused) {
+                val now = System.currentTimeMillis()
+                val elapsedSec = ((now - playbackStartWallTime) / 1000L).coerceAtLeast(0L)
+                val cur = currentEstimatedPosition + elapsedSec
+                handleWatchProgress(cur, estimatedDuration)
+                playbackProgressHandler.postDelayed(this, 4000L)
+            }
+        }
+    }
+
     // 5-second Auto-Rotation for Browse Queue
     private val autoRotateHandler = Handler(Looper.getMainLooper())
     private val autoRotateRunnable = object : Runnable {
@@ -404,6 +422,13 @@ class MainActivity : AppCompatActivity() {
         stopAutoRotateTimer()
         isWatchingFromNative = true
         currentSeekTime = resumeAt
+        currentEstimatedPosition = resumeAt
+        playbackStartWallTime = System.currentTimeMillis()
+        isPlayerPaused = false
+        estimatedDuration = if (movie.runtime > 0) movie.runtime * 60L else 7200L
+        playbackProgressHandler.removeCallbacks(playbackProgressRunnable)
+        playbackProgressHandler.postDelayed(playbackProgressRunnable, 4000L)
+
         nativeTvContainer.visibility = View.GONE
         webView.visibility = View.VISIBLE
 
@@ -414,7 +439,10 @@ class MainActivity : AppCompatActivity() {
             season,
             episode
         )
-        val finalUrl = if (resumeAt > 0L) "$baseStreamUrl#t=$resumeAt" else baseStreamUrl
+        val sep = if (baseStreamUrl.contains("?")) "&" else "?"
+        val finalUrl = if (resumeAt > 0L) {
+            "$baseStreamUrl${sep}startAt=$resumeAt&startTime=$resumeAt&t=$resumeAt#t=$resumeAt"
+        } else baseStreamUrl
         Log.d(TAG, "Playing stream via ${selectedServer.name}: $finalUrl (resumeAt: $resumeAt)")
         val itemLabel = if (movie.mediaType == "tv") "S${season} E${episode}" else "Movie"
         val resumeMsg = if (resumeAt > 0L) " [Resuming at ${formatTimeSeconds(resumeAt)}]" else ""
@@ -794,6 +822,10 @@ class MainActivity : AppCompatActivity() {
     fun handleWatchProgress(cur: Long, dur: Long) {
         val movie = currentDetailMovie ?: return
         if (cur <= 5L) return
+        currentEstimatedPosition = cur
+        currentSeekTime = cur
+        playbackStartWallTime = System.currentTimeMillis()
+        if (dur > 0L) estimatedDuration = dur
         val item = WatchHistoryItem(
             tmdbId = movie.id,
             mediaType = movie.mediaType,
@@ -804,10 +836,19 @@ class MainActivity : AppCompatActivity() {
             episode = selectedEpisodeNum,
             episodeTitle = null,
             positionSeconds = cur,
-            durationSeconds = dur,
+            durationSeconds = if (dur > 0L) dur else estimatedDuration,
             lastWatchedTimestamp = System.currentTimeMillis()
         )
         WatchHistoryManager.saveProgress(this, item)
+    }
+
+    private fun saveCurrentEstimatedProgress() {
+        if (!isWatchingFromNative) return
+        val elapsedSec = ((System.currentTimeMillis() - playbackStartWallTime) / 1000L).coerceAtLeast(0L)
+        val finalPos = currentEstimatedPosition + elapsedSec
+        if (finalPos > 5L) {
+            handleWatchProgress(finalPos, estimatedDuration)
+        }
     }
 
     override fun onResume() {
@@ -823,6 +864,8 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         stopAutoRotateTimer()
+        saveCurrentEstimatedProgress()
+        playbackProgressHandler.removeCallbacks(playbackProgressRunnable)
         webView.onPause()
     }
 
@@ -896,12 +939,20 @@ class MainActivity : AppCompatActivity() {
             } else if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_MEDIA_REWIND) {
                 if (event.action == KeyEvent.ACTION_DOWN && !cursorLayout.isCursorMode) {
                     webView.evaluateJavascript("window.__7reels_seek && window.__7reels_seek(-10);", null)
+                    saveCurrentEstimatedProgress()
+                    currentEstimatedPosition = (currentEstimatedPosition - 10L).coerceAtLeast(0L)
+                    playbackStartWallTime = System.currentTimeMillis()
+                    handleWatchProgress(currentEstimatedPosition, estimatedDuration)
                     Toast.makeText(this, "⏪ -10s", Toast.LENGTH_SHORT).show()
                     return true
                 }
             } else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT || keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD) {
                 if (event.action == KeyEvent.ACTION_DOWN && !cursorLayout.isCursorMode) {
                     webView.evaluateJavascript("window.__7reels_seek && window.__7reels_seek(10);", null)
+                    saveCurrentEstimatedProgress()
+                    currentEstimatedPosition = currentEstimatedPosition + 10L
+                    playbackStartWallTime = System.currentTimeMillis()
+                    handleWatchProgress(currentEstimatedPosition, estimatedDuration)
                     Toast.makeText(this, "⏩ +10s", Toast.LENGTH_SHORT).show()
                     return true
                 }
@@ -1007,6 +1058,8 @@ class MainActivity : AppCompatActivity() {
 
                 // 3. If watching stream initiated from Native mode, return to Movie Details / Server screen
                 if (isWatchingFromNative) {
+                    saveCurrentEstimatedProgress()
+                    playbackProgressHandler.removeCallbacks(playbackProgressRunnable)
                     isWatchingFromNative = false
                     cursorLayout.toggleCursorMode(false)
                     webView.stopLoading()
@@ -1383,13 +1436,25 @@ class MainActivity : AppCompatActivity() {
                     }
                 }, 3000);
 
-                // Listen for postMessage from embed iframes
+                // Listen for postMessage from embed iframes (VidLink, VidFast, player events)
                 window.addEventListener('message', function(ev) {
                     if (!ev || !ev.data) return;
                     try {
                         var d = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data;
-                        var cur = Math.floor(d.currentTime || d.time || (d.data ? d.data.time : 0) || 0);
-                        var dur = Math.floor(d.duration || (d.data ? d.data.duration : 0) || 0);
+                        var cur = 0;
+                        var dur = 0;
+                        if (d) {
+                            if (typeof d.currentTime === 'number') cur = Math.floor(d.currentTime);
+                            else if (typeof d.time === 'number') cur = Math.floor(d.time);
+                            else if (typeof d.position === 'number') cur = Math.floor(d.position);
+                            else if (d.data) {
+                                if (typeof d.data.currentTime === 'number') cur = Math.floor(d.data.currentTime);
+                                else if (typeof d.data.time === 'number') cur = Math.floor(d.data.time);
+                                else if (typeof d.data.position === 'number') cur = Math.floor(d.data.position);
+                            }
+                            if (typeof d.duration === 'number') dur = Math.floor(d.duration);
+                            else if (d.data && typeof d.data.duration === 'number') dur = Math.floor(d.data.duration);
+                        }
                         if (cur > 0 && window.AndroidApp && window.AndroidApp.saveWatchProgress) {
                             window.AndroidApp.saveWatchProgress(cur, dur);
                         }
