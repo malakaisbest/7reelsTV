@@ -11,6 +11,13 @@ class ServerAdapter(
     private val onServerClick: (StreamServer) -> Unit
 ) : RecyclerView.Adapter<ServerAdapter.ServerViewHolder>() {
 
+    private var activeServerId: String = servers.firstOrNull()?.id ?: "vidfast"
+
+    fun setActiveServer(id: String) {
+        activeServerId = id
+        notifyDataSetChanged()
+    }
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ServerViewHolder {
         val view = LayoutInflater.from(parent.context).inflate(R.layout.item_server_card, parent, false)
         return ServerViewHolder(view)
@@ -30,6 +37,9 @@ class ServerAdapter(
             title.text = item.name
             desc.text = item.description
 
+            val isActive = item.id == activeServerId
+            itemView.isSelected = isActive
+
             itemView.setOnFocusChangeListener { v, hasFocus ->
                 if (hasFocus) {
                     v.animate().scaleX(1.06f).scaleY(1.06f).setDuration(120).start()
@@ -41,6 +51,7 @@ class ServerAdapter(
             }
 
             itemView.setOnClickListener {
+                setActiveServer(item.id)
                 onServerClick(item)
             }
         }

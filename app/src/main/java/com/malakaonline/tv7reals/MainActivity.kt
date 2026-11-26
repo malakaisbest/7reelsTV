@@ -26,6 +26,7 @@ import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
@@ -80,8 +81,18 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnDetailsBack: Button
     private lateinit var btnDetailsExit: Button
     private lateinit var recyclerServers: RecyclerView
+    private lateinit var layoutTvEpisodes: LinearLayout
+    private lateinit var recyclerSeasons: RecyclerView
+    private lateinit var recyclerEpisodes: RecyclerView
+    private lateinit var layoutMovieExtras: LinearLayout
+    private lateinit var recyclerSimilarMovies: RecyclerView
+    private lateinit var btnPlayNow: Button
+    private lateinit var tvPlayStatus: TextView
     private lateinit var recyclerCast: RecyclerView
     private lateinit var detailsLoading: ProgressBar
+    private lateinit var textBottomRowTitle: TextView
+    private lateinit var btnToggleBottomRow: Button
+    private lateinit var recyclerContinueWatching: RecyclerView
 
     private var currentHeroMovie: MovieItem? = null
     private var currentDetailMovie: MovieItem? = null
@@ -89,10 +100,20 @@ class MainActivity : AppCompatActivity() {
     private var currentFeaturedIndex: Int = 0
 
     private var trendingAdapter: TrendingCompactAdapter? = null
+    private var similarAdapter: TrendingCompactAdapter? = null
+    private var continueWatchingAdapter: ContinueWatchingAdapter? = null
+    private var isShowingRecents: Boolean = false
+    private var currentSeekTime: Long = 0L
     private var moviesColumnAdapter: ColumnMovieAdapter? = null
     private var tvColumnAdapter: ColumnMovieAdapter? = null
     private var castAdapter: CastAdapter? = null
     private var serverAdapter: ServerAdapter? = null
+    private var seasonAdapter: SeasonAdapter? = null
+    private var episodeAdapter: EpisodeAdapter? = null
+
+    private var selectedServer: StreamServer = ServerConfig.AVAILABLE_SERVERS[0]
+    private var selectedSeasonNum: Int = 1
+    private var selectedEpisodeNum: Int = 1
 
     // 5-second Auto-Rotation for Browse Queue
     private val autoRotateHandler = Handler(Looper.getMainLooper())
@@ -184,8 +205,19 @@ class MainActivity : AppCompatActivity() {
         btnDetailsBack = findViewById(R.id.btnDetailsBack)
         btnDetailsExit = findViewById(R.id.btnDetailsExit)
         recyclerServers = findViewById(R.id.recyclerServers)
+        layoutTvEpisodes = findViewById(R.id.layoutTvEpisodes)
+        layoutMovieExtras = findViewById(R.id.layoutMovieExtras)
+        recyclerSeasons = findViewById(R.id.recyclerSeasons)
+        recyclerEpisodes = findViewById(R.id.recyclerEpisodes)
+        recyclerSimilarMovies = findViewById(R.id.recyclerSimilarMovies)
+        btnPlayNow = findViewById(R.id.btnPlayNow)
+        tvPlayStatus = findViewById(R.id.tvPlayStatus)
         recyclerCast = findViewById(R.id.recyclerCast)
         detailsLoading = findViewById(R.id.detailsLoading)
+
+        textBottomRowTitle = findViewById(R.id.textBottomRowTitle)
+        btnToggleBottomRow = findViewById(R.id.btnToggleBottomRow)
+        recyclerContinueWatching = findViewById(R.id.recyclerContinueWatching)
 
         // Header Actions
         btnNativeSearch.setOnClickListener { showSearchDialog() }
@@ -209,6 +241,19 @@ class MainActivity : AppCompatActivity() {
         )
         recyclerBottomTrending.adapter = trendingAdapter
 
+        recyclerContinueWatching.layoutManager =
+            LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        continueWatchingAdapter = ContinueWatchingAdapter(
+            emptyList(),
+            onItemFocused = { item -> selectMovieDirectly(item.toMovieItem()) },
+            onItemClick = { item -> promptResumeOrStart(item.toMovieItem(), item) }
+        )
+        recyclerContinueWatching.adapter = continueWatchingAdapter
+
+        btnToggleBottomRow.setOnClickListener {
+            toggleBottomRow()
+        }
+
         recyclerRightMovies.layoutManager =
             LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false)
         moviesColumnAdapter = ColumnMovieAdapter(
@@ -229,13 +274,55 @@ class MainActivity : AppCompatActivity() {
 
         // Setup Details RecyclerViews
         recyclerServers.layoutManager =
-            LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+            androidx.recyclerview.widget.GridLayoutManager(this, 3)
         serverAdapter = ServerAdapter(ServerConfig.AVAILABLE_SERVERS) { server ->
-            currentDetailMovie?.let { movie ->
-                playServerStream(server, movie)
-            }
+            selectedServer = server
+            serverAdapter?.setActiveServer(server.id)
+            updatePlayStatus()
         }
         recyclerServers.adapter = serverAdapter
+
+        recyclerSimilarMovies.layoutManager =
+            LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        similarAdapter = TrendingCompactAdapter(
+            emptyList(),
+            onItemFocused = {},
+            onItemClick = { item -> openMovieDetails(item) }
+        )
+        recyclerSimilarMovies.adapter = similarAdapter
+
+        recyclerSeasons.layoutManager =
+            LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        seasonAdapter = SeasonAdapter(emptyList()) { season ->
+            selectedSeasonNum = season.seasonNumber
+            seasonAdapter?.setActiveSeason(season.seasonNumber)
+            currentDetailMovie?.let { movie ->
+                loadSeasonEpisodes(movie.id, season.seasonNumber)
+            }
+        }
+        recyclerSeasons.adapter = seasonAdapter
+
+        recyclerEpisodes.layoutManager =
+            LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        episodeAdapter = EpisodeAdapter(emptyList()) { ep ->
+            selectedEpisodeNum = ep.episodeNumber
+            episodeAdapter?.setActiveEpisode(ep.episodeNumber)
+            updatePlayStatus()
+            // Check if this episode has saved timeline progress
+            currentDetailMovie?.let { movie ->
+                val history = WatchHistoryManager.getProgress(this, movie.id, movie.mediaType, selectedSeasonNum, ep.episodeNumber)
+                if (history != null && history.positionSeconds > 15L && (history.durationSeconds == 0L || history.positionSeconds < history.durationSeconds - 60L)) {
+                    promptResumeOrStart(movie, history)
+                } else {
+                    executePlayback(movie, selectedSeasonNum, ep.episodeNumber, resumeAt = 0L)
+                }
+            }
+        }
+        recyclerEpisodes.adapter = episodeAdapter
+
+        btnPlayNow.setOnClickListener {
+            playCurrentSelection()
+        }
 
         recyclerCast.layoutManager =
             LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
@@ -243,9 +330,115 @@ class MainActivity : AppCompatActivity() {
         recyclerCast.adapter = castAdapter
     }
 
+    private fun updatePlayStatus() {
+        val movie = currentDetailMovie ?: return
+        if (movie.mediaType == "tv") {
+            tvPlayStatus.text = "${selectedServer.name}  •  S${selectedSeasonNum} E${selectedEpisodeNum}"
+            btnPlayNow.text = "▶ Watch S${selectedSeasonNum} E${selectedEpisodeNum}"
+        } else {
+            tvPlayStatus.text = "${selectedServer.name}  •  Full Movie"
+            btnPlayNow.text = "▶ Watch Movie"
+        }
+    }
+
+    private fun loadSeasonEpisodes(tvId: Long, seasonNum: Int) {
+        lifecycleScope.launch {
+            try {
+                val eps = MovieRepository.getSeasonEpisodes(tvId, seasonNum)
+                if (eps.isNotEmpty()) {
+                    episodeAdapter?.updateEpisodes(eps, selectedEpisode = 1)
+                    selectedEpisodeNum = eps.first().episodeNumber
+                    updatePlayStatus()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private fun playCurrentSelection() {
+        val movie = currentDetailMovie ?: return
+        val history = WatchHistoryManager.getProgress(this, movie.id, movie.mediaType, selectedSeasonNum, selectedEpisodeNum)
+        if (history != null && history.positionSeconds > 15L && (history.durationSeconds == 0L || history.positionSeconds < history.durationSeconds - 60L)) {
+            promptResumeOrStart(movie, history)
+        } else {
+            executePlayback(movie, selectedSeasonNum, selectedEpisodeNum, resumeAt = 0L)
+        }
+    }
+
+    private fun promptResumeOrStart(movie: MovieItem, history: WatchHistoryItem) {
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_resume_prompt, null)
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .create()
+
+        val textTitle = dialogView.findViewById<TextView>(R.id.textResumeTitle)
+        val textSubtitle = dialogView.findViewById<TextView>(R.id.textResumeSubtitle)
+        val progress = dialogView.findViewById<ProgressBar>(R.id.progressResume)
+        val btnStartOver = dialogView.findViewById<Button>(R.id.btnResumeStartOver)
+        val btnResume = dialogView.findViewById<Button>(R.id.btnResumePlay)
+
+        val episodeLabel = if (history.mediaType == "tv") " • S${history.season} E${history.episode}" else ""
+        textTitle.text = "${history.title}$episodeLabel"
+        val remaining = history.getRemainingTime()
+        val remStr = if (remaining.isNotEmpty()) " • $remaining" else ""
+        textSubtitle.text = "You left off at ${history.getFormattedPosition()}$remStr (${history.getProgressPercent()}%). How would you like to watch?"
+        progress.progress = history.getProgressPercent()
+
+        btnResume.text = "⏩ Resume at ${history.getFormattedPosition()}"
+        btnResume.setOnClickListener {
+            dialog.dismiss()
+            executePlayback(movie, history.season, history.episode, resumeAt = history.positionSeconds)
+        }
+
+        btnStartOver.setOnClickListener {
+            dialog.dismiss()
+            executePlayback(movie, history.season, history.episode, resumeAt = 0L)
+        }
+
+        dialog.show()
+        btnResume.requestFocus()
+    }
+
+    private fun executePlayback(movie: MovieItem, season: Int, episode: Int, resumeAt: Long) {
+        stopAutoRotateTimer()
+        isWatchingFromNative = true
+        currentSeekTime = resumeAt
+        nativeTvContainer.visibility = View.GONE
+        webView.visibility = View.VISIBLE
+
+        val baseStreamUrl = ServerConfig.getStreamUrl(
+            selectedServer.id,
+            movie.id,
+            movie.mediaType,
+            season,
+            episode
+        )
+        val finalUrl = if (resumeAt > 0L) "$baseStreamUrl#t=$resumeAt" else baseStreamUrl
+        Log.d(TAG, "Playing stream via ${selectedServer.name}: $finalUrl (resumeAt: $resumeAt)")
+        val itemLabel = if (movie.mediaType == "tv") "S${season} E${episode}" else "Movie"
+        val resumeMsg = if (resumeAt > 0L) " [Resuming at ${formatTimeSeconds(resumeAt)}]" else ""
+        Toast.makeText(this, "▶ OK: Play/Pause • ◀/▶: Seek • 💬 Subtitles: Remote 'Subtitles' or Long-press OK", Toast.LENGTH_LONG).show()
+        webView.loadUrl(finalUrl)
+        webView.requestFocus()
+    }
+
+    private fun formatTimeSeconds(seconds: Long): String {
+        val m = (seconds % 3600) / 60
+        val s = seconds % 60
+        val h = seconds / 3600
+        return if (h > 0) String.format("%d:%02d:%02d", h, m, s) else String.format("%02d:%02d", m, s)
+    }
+
     private fun openMovieDetails(item: MovieItem) {
         currentDetailMovie = item
         stopAutoRotateTimer()
+
+        // Reset server and season/episode state
+        selectedServer = ServerConfig.AVAILABLE_SERVERS[0]
+        serverAdapter?.setActiveServer(selectedServer.id)
+        selectedSeasonNum = 1
+        selectedEpisodeNum = 1
 
         // Switch containers
         browseContainer.visibility = View.GONE
@@ -263,6 +456,32 @@ class MainActivity : AppCompatActivity() {
 
         detailsPoster.load(item.getPosterUrl()) { crossfade(true) }
         detailsBackdrop.load(item.getBackdropUrl()) { crossfade(true) }
+
+        if (item.mediaType == "tv") {
+            layoutMovieExtras.visibility = View.GONE
+            layoutTvEpisodes.visibility = View.VISIBLE
+            updatePlayStatus()
+        } else {
+            layoutTvEpisodes.visibility = View.GONE
+            layoutMovieExtras.visibility = View.VISIBLE
+            updatePlayStatus()
+
+            // Fetch and display Similar Movies to fill right pane
+            similarAdapter?.updateItems(emptyList())
+            lifecycleScope.launch {
+                try {
+                    val similar = MovieRepository.getSimilar(item.id, item.mediaType)
+                    val list = if (similar.isNotEmpty()) {
+                        similar.take(12)
+                    } else {
+                        featuredQueue.filter { it.id != item.id }.take(10)
+                    }
+                    similarAdapter?.updateItems(list)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
 
         // Fetch deep details & actors asynchronously
         detailsLoading.visibility = View.VISIBLE
@@ -293,6 +512,12 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     castAdapter?.updateItems(detail.cast)
+
+                    if (item.mediaType == "tv") {
+                        val validSeasons = detail.seasons.filter { it.seasonNumber > 0 }.ifEmpty { detail.seasons }
+                        seasonAdapter?.updateSeasons(validSeasons, selectedSeason = 1)
+                        loadSeasonEpisodes(item.id, 1)
+                    }
                 }
             } catch (e: Exception) {
                 detailsLoading.visibility = View.GONE
@@ -300,7 +525,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        btnDetailsBack.requestFocus()
+        btnPlayNow.requestFocus()
     }
 
     private fun closeMovieDetails() {
@@ -310,19 +535,6 @@ class MainActivity : AppCompatActivity() {
             startAutoRotateTimer()
         }
         btnHeroWatch.requestFocus()
-    }
-
-    private fun playServerStream(server: StreamServer, item: MovieItem) {
-        stopAutoRotateTimer()
-        isWatchingFromNative = true
-        nativeTvContainer.visibility = View.GONE
-        webView.visibility = View.VISIBLE
-
-        val streamUrl = ServerConfig.getStreamUrl(server.id, item.id, item.mediaType)
-        Log.d(TAG, "Playing stream via ${server.name}: $streamUrl")
-        Toast.makeText(this, "Connecting to ${server.name}...", Toast.LENGTH_SHORT).show()
-        webView.loadUrl(streamUrl)
-        webView.requestFocus()
     }
 
     private fun selectMovieDirectly(item: MovieItem) {
@@ -394,6 +606,7 @@ class MainActivity : AppCompatActivity() {
                 trendingAdapter?.updateItems(combined.shuffled().take(15))
                 moviesColumnAdapter?.updateItems(movies)
                 tvColumnAdapter?.updateItems(tvShows)
+                refreshContinueWatching()
 
                 if (featuredQueue.isNotEmpty() && currentHeroMovie == null) {
                     selectFeaturedMovieByIndex(0, fromAuto = false)
@@ -547,12 +760,63 @@ class MainActivity : AppCompatActivity() {
         editQuery.requestFocus()
     }
 
+    private fun refreshContinueWatching() {
+        val history = WatchHistoryManager.getHistory(this)
+        if (history.isNotEmpty()) {
+            continueWatchingAdapter?.updateItems(history)
+            btnToggleBottomRow.visibility = View.VISIBLE
+            showContinueWatchingRow(true)
+        } else {
+            btnToggleBottomRow.visibility = View.GONE
+            showContinueWatchingRow(false)
+        }
+    }
+
+    private fun showContinueWatchingRow(showRecents: Boolean) {
+        isShowingRecents = showRecents
+        if (showRecents) {
+            textBottomRowTitle.text = "⏱️ Continue Watching"
+            btnToggleBottomRow.text = "🔥 Trending"
+            recyclerContinueWatching.visibility = View.VISIBLE
+            recyclerBottomTrending.visibility = View.GONE
+        } else {
+            textBottomRowTitle.text = "🔥 Trending Now"
+            btnToggleBottomRow.text = "⏱️ Recents"
+            recyclerContinueWatching.visibility = View.GONE
+            recyclerBottomTrending.visibility = View.VISIBLE
+        }
+    }
+
+    private fun toggleBottomRow() {
+        showContinueWatchingRow(!isShowingRecents)
+    }
+
+    fun handleWatchProgress(cur: Long, dur: Long) {
+        val movie = currentDetailMovie ?: return
+        if (cur <= 5L) return
+        val item = WatchHistoryItem(
+            tmdbId = movie.id,
+            mediaType = movie.mediaType,
+            title = movie.title,
+            posterPath = movie.posterPath,
+            backdropPath = movie.backdropPath,
+            season = selectedSeasonNum,
+            episode = selectedEpisodeNum,
+            episodeTitle = null,
+            positionSeconds = cur,
+            durationSeconds = dur,
+            lastWatchedTimestamp = System.currentTimeMillis()
+        )
+        WatchHistoryManager.saveProgress(this, item)
+    }
+
     override fun onResume() {
         super.onResume()
         hideSystemBars()
         webView.onResume()
         if (currentAppMode == AppPreferences.MODE_NATIVE && browseContainer.visibility == View.VISIBLE) {
             startAutoRotateTimer()
+            refreshContinueWatching()
         }
     }
 
@@ -592,6 +856,50 @@ class MainActivity : AppCompatActivity() {
             return true
         }
 
+        // Subtitle / Captions button on TV remote
+        val isSubtitleKey = event.keyCode == KeyEvent.KEYCODE_CAPTIONS ||
+                            event.keyCode == KeyEvent.KEYCODE_MEDIA_AUDIO_TRACK ||
+                            event.keyCode == 175 || // KEYCODE_CAPTIONS explicit fallback
+                            event.keyCode == 233    // KEYCODE_TV_TELETEXT
+        if (isSubtitleKey && event.action == KeyEvent.ACTION_UP) {
+            toggleSubtitlesAction()
+            return true
+        }
+
+        // Remote navigation during video playback (from Native mode or custom video view)
+        if (isWatchingFromNative || customView != null) {
+            val keyCode = event.keyCode
+            // 1. Remote OK / Center / Enter / Play-Pause: Direct Click on Web Video Player
+            if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+                keyCode == KeyEvent.KEYCODE_ENTER ||
+                keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER ||
+                keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE ||
+                keyCode == KeyEvent.KEYCODE_MEDIA_PLAY ||
+                keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE) {
+                if (event.action == KeyEvent.ACTION_UP) {
+                    if (!cursorLayout.isCursorMode) {
+                        // Dispatch physical touch event at center of screen to trigger HTML5 play button
+                        cursorLayout.dispatchCenterClick()
+                        // Also trigger JS toggle play/pause handler
+                        webView.evaluateJavascript("window.__7reels_toggle_play && window.__7reels_toggle_play();", null)
+                        return true
+                    }
+                }
+            } else if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_MEDIA_REWIND) {
+                if (event.action == KeyEvent.ACTION_DOWN && !cursorLayout.isCursorMode) {
+                    webView.evaluateJavascript("window.__7reels_seek && window.__7reels_seek(-10);", null)
+                    Toast.makeText(this, "⏪ -10s", Toast.LENGTH_SHORT).show()
+                    return true
+                }
+            } else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT || keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD) {
+                if (event.action == KeyEvent.ACTION_DOWN && !cursorLayout.isCursorMode) {
+                    webView.evaluateJavascript("window.__7reels_seek && window.__7reels_seek(10);", null)
+                    Toast.makeText(this, "⏩ +10s", Toast.LENGTH_SHORT).show()
+                    return true
+                }
+            }
+        }
+
         if (event.keyCode == KeyEvent.KEYCODE_BACK) {
             when (event.action) {
                 KeyEvent.ACTION_DOWN -> {
@@ -615,6 +923,33 @@ class MainActivity : AppCompatActivity() {
             }
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    private fun toggleSubtitlesAction() {
+        if (isWatchingFromNative || customView != null) {
+            // 1. Evaluate JS to click the subtitle/CC button in the player or toggle textTracks
+            webView.evaluateJavascript("""
+                (function() {
+                    if (window.__7reels_toggle_subtitles) {
+                        return window.__7reels_toggle_subtitles();
+                    }
+                    return 'no_handler';
+                })();
+            """.trimIndent()) { result ->
+                Log.d(TAG, "Subtitles toggled: $result")
+            }
+
+            // 2. Enable mouse cursor positioned at bottom-right near player controls
+            if (!cursorLayout.isCursorMode) {
+                cursorLayout.toggleCursorMode(true)
+                val w = if (cursorLayout.width > 0) cursorLayout.width.toFloat() else 1920f
+                val h = if (cursorLayout.height > 0) cursorLayout.height.toFloat() else 1080f
+                cursorLayout.setCursorPosition(w * 0.88f, h * 0.88f)
+            }
+            Toast.makeText(this, "💬 Subtitles / CC (Use remote arrows & OK to select)", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "💬 Subtitles button is active during video playback", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun hideSystemBars() {
@@ -642,12 +977,14 @@ class MainActivity : AppCompatActivity() {
                 // 2. If watching stream initiated from Native mode, return to Movie Details / Server screen
                 if (isWatchingFromNative) {
                     isWatchingFromNative = false
+                    cursorLayout.toggleCursorMode(false)
                     webView.stopLoading()
                     webView.loadUrl("about:blank")
                     webView.visibility = View.GONE
                     nativeTvContainer.visibility = View.VISIBLE
-                    // Return focus to server list so user can immediately choose another server
-                    recyclerServers.requestFocus()
+                    refreshContinueWatching()
+                    // Return focus to Play button
+                    btnPlayNow.requestFocus()
                     return
                 }
 
@@ -706,6 +1043,13 @@ class MainActivity : AppCompatActivity() {
             Log.d(TAG, "Mode selector requested via Web Interface")
             activity.runOnUiThread {
                 activity.showModeSelectionDialog(isFirstRun = false)
+            }
+        }
+
+        @JavascriptInterface
+        fun saveWatchProgress(currentTime: Double, duration: Double) {
+            activity.runOnUiThread {
+                activity.handleWatchProgress(currentTime.toLong(), duration.toLong())
             }
         }
     }
@@ -810,6 +1154,9 @@ class MainActivity : AppCompatActivity() {
                 progressBar.visibility = View.GONE
                 if (url != null && url.contains("7reels.cc")) {
                     injectNavButtons()
+                }
+                if (isWatchingFromNative) {
+                    injectProgressTracker()
                 }
             }
         }
@@ -962,6 +1309,227 @@ class MainActivity : AppCompatActivity() {
                     window.__7reels_observer_set = true;
                     var observer = new MutationObserver(checkAllButtons);
                     observer.observe(document.body, { childList: true, subtree: true });
+                }
+            })();
+        """.trimIndent()
+
+        webView.evaluateJavascript(js, null)
+    }
+
+    private fun injectProgressTracker() {
+        val targetSeek = currentSeekTime
+        val js = """
+            (function() {
+                if (window.__7reels_tracker_installed) return;
+                window.__7reels_tracker_installed = true;
+
+                function findActiveVideo() {
+                    var v = document.querySelector('video');
+                    if (v && v.duration > 0) return v;
+                    var frames = document.querySelectorAll('iframe');
+                    for (var i = 0; i < frames.length; i++) {
+                        try {
+                            var fv = frames[i].contentDocument ? frames[i].contentDocument.querySelector('video') : null;
+                            if (fv && fv.duration > 0) return fv;
+                        } catch(e) {}
+                    }
+                    return null;
+                }
+
+                // Periodic progress reporter
+                var lastTime = 0;
+                setInterval(function() {
+                    var v = findActiveVideo();
+                    if (v && !isNaN(v.currentTime) && v.duration > 0) {
+                        var cur = Math.floor(v.currentTime);
+                        var dur = Math.floor(v.duration);
+                        if (cur !== lastTime && cur > 0) {
+                            lastTime = cur;
+                            if (window.AndroidApp && window.AndroidApp.saveWatchProgress) {
+                                window.AndroidApp.saveWatchProgress(cur, dur);
+                            }
+                        }
+                    }
+                }, 3000);
+
+                // Listen for postMessage from embed iframes
+                window.addEventListener('message', function(ev) {
+                    if (!ev || !ev.data) return;
+                    try {
+                        var d = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data;
+                        var cur = Math.floor(d.currentTime || d.time || (d.data ? d.data.time : 0) || 0);
+                        var dur = Math.floor(d.duration || (d.data ? d.data.duration : 0) || 0);
+                        if (cur > 0 && window.AndroidApp && window.AndroidApp.saveWatchProgress) {
+                            window.AndroidApp.saveWatchProgress(cur, dur);
+                        }
+                    } catch(err) {}
+                });
+
+                // Toggle Play/Pause helper callable from Android TV remote
+                window.__7reels_toggle_play = function() {
+                    var v = findActiveVideo();
+                    if (v) {
+                        if (v.paused) {
+                            try { v.play(); } catch(e) {}
+                        } else {
+                            try { v.pause(); } catch(e) {}
+                        }
+                        return true;
+                    }
+                    var cx = window.innerWidth / 2;
+                    var cy = window.innerHeight / 2;
+                    var el = document.elementFromPoint(cx, cy);
+                    if (el && el.tagName !== 'BODY' && el.tagName !== 'HTML') {
+                        try {
+                            ['mousedown', 'mouseup', 'click'].forEach(function(evt) {
+                                el.dispatchEvent(new MouseEvent(evt, { bubbles: true, cancelable: true, clientX: cx, clientY: cy }));
+                            });
+                            return true;
+                        } catch(e) {}
+                    }
+                    return false;
+                };
+
+                // Relative seek helper callable from Android TV remote
+                window.__7reels_seek = function(delta) {
+                    var v = findActiveVideo();
+                    if (v && !isNaN(v.currentTime)) {
+                        try {
+                            v.currentTime = Math.max(0, Math.min(v.duration || 999999, v.currentTime + delta));
+                            return true;
+                        } catch(e) {}
+                    }
+                    return false;
+                };
+
+                // Subtitles / Captions toggle helper callable from Android TV remote
+                window.__7reels_toggle_subtitles = function() {
+                    // 1. Wake up control bar with mouse movement
+                    var w = window.innerWidth;
+                    var h = window.innerHeight;
+                    try {
+                        var moveEvt = new MouseEvent('mousemove', { bubbles: true, clientX: w / 2, clientY: h - 50 });
+                        document.dispatchEvent(moveEvt);
+                    } catch(e) {}
+
+                    // 2. Search for subtitle/CC button in document and child iframes
+                    var selectors = [
+                        'button[aria-label*="subtitle" i]',
+                        'button[aria-label*="caption" i]',
+                        'button[title*="subtitle" i]',
+                        'button[title*="caption" i]',
+                        '.jw-icon-cc',
+                        '.vjs-subs-caps-button',
+                        '[data-plyr="captions"]',
+                        'button.subtitles',
+                        '[class*="subtitles" i]',
+                        '[class*="captions" i]',
+                        '[class*="caption-button" i]',
+                        'button[data-tooltip*="subtitle" i]',
+                        'button[data-tooltip*="caption" i]',
+                        '.plyr__control[data-plyr="captions"]',
+                        '.jw-settings-content'
+                    ];
+
+                    function searchButton(doc) {
+                        for (var i = 0; i < selectors.length; i++) {
+                            var el = doc.querySelector(selectors[i]);
+                            if (el) return el;
+                        }
+                        return null;
+                    }
+
+                    var btn = searchButton(document);
+                    if (!btn) {
+                        var frames = document.querySelectorAll('iframe');
+                        for (var f = 0; f < frames.length; f++) {
+                            try {
+                                if (frames[f].contentDocument) {
+                                    btn = searchButton(frames[f].contentDocument);
+                                    if (btn) break;
+                                }
+                            } catch(e) {}
+                        }
+                    }
+
+                    if (btn) {
+                        try {
+                            btn.click();
+                            return 'clicked_button';
+                        } catch(e) {}
+                    }
+
+                    // 3. Fallback: Check HTML5 video textTracks
+                    var v = findActiveVideo();
+                    if (v && v.textTracks && v.textTracks.length > 0) {
+                        var tracks = v.textTracks;
+                        var showingIdx = -1;
+                        for (var t = 0; t < tracks.length; t++) {
+                            if (tracks[t].mode === 'showing') {
+                                showingIdx = t;
+                                break;
+                            }
+                        }
+                        if (showingIdx === -1) {
+                            tracks[0].mode = 'showing';
+                            return 'enabled_' + (tracks[0].label || tracks[0].language || '0');
+                        } else if (showingIdx + 1 < tracks.length) {
+                            tracks[showingIdx].mode = 'disabled';
+                            tracks[showingIdx + 1].mode = 'showing';
+                            return 'enabled_' + (tracks[showingIdx + 1].label || tracks[showingIdx + 1].language || '' + (showingIdx + 1));
+                        } else {
+                            tracks[showingIdx].mode = 'disabled';
+                            return 'disabled';
+                        }
+                    }
+
+                    return 'not_found';
+                };
+
+                // Automatic play trigger attempts for Android TV
+                function autoTriggerPlay() {
+                    var v = findActiveVideo();
+                    if (v && v.paused) {
+                        try {
+                            var p = v.play();
+                            if (p !== undefined) p.catch(function(){});
+                        } catch(e) {}
+                    }
+                    var cx = window.innerWidth / 2;
+                    var cy = window.innerHeight / 2;
+                    var el = document.elementFromPoint(cx, cy);
+                    if (el && el.tagName !== 'BODY' && el.tagName !== 'HTML') {
+                        try {
+                            ['mousedown', 'mouseup', 'click'].forEach(function(evt) {
+                                el.dispatchEvent(new MouseEvent(evt, { bubbles: true, cancelable: true, clientX: cx, clientY: cy }));
+                            });
+                        } catch(e) {}
+                    }
+                    var playBtns = document.querySelectorAll('button[aria-label*="Play" i], button[title*="Play" i], .play-btn, .vjs-big-play-button, .jw-display-icon-container, [class*="play-button" i], [class*="PlayButton" i], .plyr__control--overlaid');
+                    for (var i = 0; i < playBtns.length; i++) {
+                        try { playBtns[i].click(); } catch(e){}
+                    }
+                }
+
+                [800, 1500, 2500, 4000].forEach(function(delay) {
+                    setTimeout(autoTriggerPlay, delay);
+                });
+
+                // Auto-seek if resuming
+                var seekTarget = $targetSeek;
+                if (seekTarget > 0) {
+                    var tries = 0;
+                    var seekInterval = setInterval(function() {
+                        tries++;
+                        var v = findActiveVideo();
+                        if (v && v.readyState >= 1) {
+                            try {
+                                v.currentTime = seekTarget;
+                                clearInterval(seekInterval);
+                            } catch(e) {}
+                        }
+                        if (tries > 35) clearInterval(seekInterval);
+                    }, 400);
                 }
             })();
         """.trimIndent()

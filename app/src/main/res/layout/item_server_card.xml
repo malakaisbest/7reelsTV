@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="150dp"
-    android:layout_height="56dp"
-    android:layout_marginEnd="10dp"
+    android:layout_width="match_parent"
+    android:layout_height="40dp"
+    android:layout_margin="3dp"
     android:background="@drawable/bg_card_selector"
     android:focusable="true"
     android:focusableInTouchMode="true"
@@ -14,14 +14,14 @@
         android:layout_height="match_parent"
         android:orientation="vertical"
         android:gravity="center_vertical"
-        android:paddingHorizontal="10dp">
+        android:paddingHorizontal="8dp">
 
         <TextView
             android:id="@+id/serverTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textColor="@color/white"
-            android:textSize="11sp"
+            android:textSize="10sp"
             android:textStyle="bold"
             android:maxLines="1"
             android:ellipsize="end" />
@@ -30,9 +30,8 @@
             android:id="@+id/serverDesc"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
             android:textColor="@color/brand_emerald_light"
-            android:textSize="9sp"
+            android:textSize="8sp"
             android:maxLines="1"
             android:ellipsize="end" />
 

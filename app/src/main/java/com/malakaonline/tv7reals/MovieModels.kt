@@ -12,6 +12,25 @@ data class CastMember(
     }
 }
 
+data class SeasonItem(
+    val seasonNumber: Int,
+    val name: String,
+    val episodeCount: Int
+)
+
+data class EpisodeItem(
+    val episodeNumber: Int,
+    val name: String,
+    val overview: String,
+    val stillPath: String?
+) {
+    fun getStillUrl(): String {
+        return if (!stillPath.isNullOrEmpty()) {
+            "https://image.tmdb.org/t/p/w300$stillPath"
+        } else ""
+    }
+}
+
 data class MovieDetail(
     val id: Long,
     val title: String,
@@ -25,6 +44,7 @@ data class MovieDetail(
     val genres: List<String>,
     val mediaType: String,
     val numberOfSeasons: Int,
+    val seasons: List<SeasonItem>,
     val cast: List<CastMember>
 ) {
     fun getPosterUrl(): String {
@@ -55,12 +75,12 @@ data class StreamServer(
 
 object ServerConfig {
     val AVAILABLE_SERVERS = listOf(
-        StreamServer("vidfast", "🟢 Server 1 (VidFast)", "Ultra Fast • HD • Auto Play"),
-        StreamServer("vidlink", "🔵 Server 2 (VidLink)", "Multi-Language • Subtitles"),
-        StreamServer("vidsrc", "🟣 Server 3 (VidSrc)", "High Stability • Mirror"),
-        StreamServer("vidbolt", "🟠 Server 4 (VidBolt)", "Fast Stream • 1080p"),
-        StreamServer("vidrock", "🟡 Server 5 (VidRock)", "Direct Stream Source"),
-        StreamServer("vidzee", "🔴 Server 6 (VidZee)", "Backup Server")
+        StreamServer("vidfast", "🟢 VidFast", "Ultra Fast • HD"),
+        StreamServer("vidlink", "🔵 VidLink", "Multi-Language"),
+        StreamServer("vidsrc", "🟣 VidSrc", "High Stability"),
+        StreamServer("vidbolt", "🟠 VidBolt", "1080p Stream"),
+        StreamServer("vidrock", "🟡 VidRock", "Direct Source"),
+        StreamServer("vidzee", "🔴 VidZee", "Backup Server")
     )
 
     fun getStreamUrl(serverId: String, tmdbId: Long, mediaType: String, season: Int = 1, episode: Int = 1): String {

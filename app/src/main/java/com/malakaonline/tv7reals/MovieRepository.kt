@@ -68,6 +68,20 @@ object MovieRepository {
                     }
                 }
 
+                val seasonsList = mutableListOf<SeasonItem>()
+                val seasonsArr = obj.optJSONArray("seasons")
+                if (seasonsArr != null) {
+                    for (i in 0 until seasonsArr.length()) {
+                        val s = seasonsArr.getJSONObject(i)
+                        val seasonNum = s.optInt("season_number", 0)
+                        val name = s.optString("name")
+                        val epCount = s.optInt("episode_count", 0)
+                        if (seasonNum > 0) {
+                            seasonsList.add(SeasonItem(seasonNum, name.ifEmpty { "Season $seasonNum" }, epCount))
+                        }
+                    }
+                }
+
                 val castList = mutableListOf<CastMember>()
                 val creditsObj = obj.optJSONObject("credits")
                 val castArr = creditsObj?.optJSONArray("cast")
@@ -97,6 +111,7 @@ object MovieRepository {
                     genres = genresList,
                     mediaType = type,
                     numberOfSeasons = numberOfSeasons,
+                    seasons = seasonsList,
                     cast = castList
                 )
             }
@@ -104,6 +119,43 @@ object MovieRepository {
             e.printStackTrace()
             return@withContext null
         }
+    }
+
+    suspend fun getSeasonEpisodes(tvId: Long, seasonNumber: Int): List<EpisodeItem> = withContext(Dispatchers.IO) {
+        val url = "$BASE_URL/tv/$tvId/season/$seasonNumber?language=en-US"
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+            .build()
+
+        try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext emptyList()
+                val body = response.body?.string() ?: return@withContext emptyList()
+                val obj = JSONObject(body)
+                val episodesArr = obj.optJSONArray("episodes") ?: return@withContext emptyList()
+
+                val epList = mutableListOf<EpisodeItem>()
+                for (i in 0 until episodesArr.length()) {
+                    val ep = episodesArr.getJSONObject(i)
+                    val epNum = ep.optInt("episode_number", i + 1)
+                    val name = ep.optString("name")
+                    val overview = ep.optString("overview")
+                    val stillPath = ep.optString("still_path").takeIf { it.isNotEmpty() && it != "null" }
+                    epList.add(EpisodeItem(epNum, name.ifEmpty { "Episode $epNum" }, overview, stillPath))
+                }
+                return@withContext epList
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return@withContext emptyList()
+        }
+    }
+
+    suspend fun getSimilar(id: Long, mediaType: String): List<MovieItem> = withContext(Dispatchers.IO) {
+        val endpoint = if (mediaType.equals("tv", ignoreCase = true)) "tv" else "movie"
+        val url = "https://7reels.cc/api/tmdb/$endpoint/$id/similar?language=en-US"
+        fetchItems(url, mediaType)
     }
 
     private fun fetchItems(url: String, defaultMediaType: String): List<MovieItem> {

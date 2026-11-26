@@ -172,6 +172,12 @@ class CursorLayout @JvmOverloads constructor(
         return super.dispatchKeyEvent(event)
     }
 
+    fun setCursorPosition(x: Float, y: Float) {
+        cursorX = x
+        cursorY = y
+        updateCursorPosition()
+    }
+
     private fun updateCursorPosition() {
         cursorView?.let { view ->
             view.x = cursorX
@@ -180,9 +186,9 @@ class CursorLayout @JvmOverloads constructor(
     }
 
     /**
-     * Dispatches down and up MotionEvents at (cursorX, cursorY) to targetView (the WebView).
+     * Dispatches down and up MotionEvents at (x, y) to targetView (the WebView).
      */
-    private fun dispatchSimulatedClick() {
+    fun dispatchSimulatedClick(x: Float = cursorX, y: Float = cursorY) {
         val target = targetView ?: this
         val downTime = SystemClock.uptimeMillis()
         val eventTime = SystemClock.uptimeMillis()
@@ -191,8 +197,8 @@ class CursorLayout @JvmOverloads constructor(
             downTime,
             eventTime,
             MotionEvent.ACTION_DOWN,
-            cursorX,
-            cursorY,
+            x,
+            y,
             0
         )
         target.dispatchTouchEvent(downEvent)
@@ -205,13 +211,23 @@ class CursorLayout @JvmOverloads constructor(
                 downTime,
                 upTime,
                 MotionEvent.ACTION_UP,
-                cursorX,
-                cursorY,
+                x,
+                y,
                 0
             )
             target.dispatchTouchEvent(upEvent)
             upEvent.recycle()
         }, 50)
+    }
+
+    /**
+     * Dispatches a simulated tap at the exact screen center.
+     * Triggers HTML5 video play/pause buttons directly without needing manual cursor positioning.
+     */
+    fun dispatchCenterClick() {
+        val cx = if (width > 0) width / 2f else resources.displayMetrics.widthPixels / 2f
+        val cy = if (height > 0) height / 2f else resources.displayMetrics.heightPixels / 2f
+        dispatchSimulatedClick(cx, cy)
     }
 
     private fun dpToPx(dp: Float): Float {
